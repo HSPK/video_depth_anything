@@ -31,6 +31,8 @@ INFER_LEN = 32
 OVERLAP = 10
 KEYFRAMES = [0, 12, 24, 25, 26, 27, 28, 29, 30, 31]
 INTERP_LEN = 8
+ALIGN_LEN = OVERLAP - INTERP_LEN  # 2
+KF_ALIGN_LIST = KEYFRAMES[:ALIGN_LEN]  # [0, 12]
 
 
 class VideoDepthAnything(nn.Module):
@@ -191,3 +193,71 @@ class VideoDepthAnything(nn.Module):
         depth_list = depth_list_aligned
 
         return np.stack(depth_list[:org_video_len], axis=0), target_fps
+
+    def infer_depth(self, frames: torch.Tensor, fp32: bool = False):
+        # Note: frames is a image-net normalized tensor, shape is [B T C H W]
+        frame_height, frame_width = frames.shape[-2], frames.shape[-1]
+
+        step_size = INFER_LEN - OVERLAP
+        T = frames.shape[1]
+        n_pad_frames = INFER_LEN - (T % step_size)
+        padded = F.pad(frames, (0, 0, 0, 0, 0, 0, 0, n_pad_frames), mode="replicate")
+
+        all_depth = []
+        pre_input = None
+        for step in tqdm(range(0, T, step_size)):
+            cur_input = padded[:, step : step + INFER_LEN]
+            if pre_input is not None:
+                cur_input[:, :OVERLAP, ...] = pre_input[:, KEYFRAMES, ...]
+
+            with torch.no_grad():
+                depth = self.forward(cur_input)  # depth shape: [B, Ti, H, W]
+
+            all_depth.append(depth.to(cur_input.dtype).cpu())
+            pre_input = cur_input
+
+        del padded
+        gc.collect()
+        all_depth = torch.cat(all_depth, dim=1)
+
+        aligned_depth = None
+        ref_align = None
+
+        for step in range(0, len(all_depth), INFER_LEN):
+            if aligned_depth is None:
+                aligned_depth += all_depth[:INFER_LEN]
+                for kf_id in KF_ALIGN_LIST:
+                    ref_align.append(all_depth[step + kf_id])
+            else:
+                curr_align = []
+                for i in range(ALIGN_LEN):
+                    curr_align.append(all_depth[step + i])
+                scale, shift = compute_scale_and_shift(
+                    np.concatenate(curr_align),
+                    np.concatenate(ref_align),
+                    np.concatenate(np.ones_like(ref_align) == 1),
+                )
+
+                pre_depth_list = aligned_depth[-INTERP_LEN:]
+                post_depth_list = all_depth[step + ALIGN_LEN : step + OVERLAP]
+                for i in range(len(post_depth_list)):
+                    post_depth_list[i] = post_depth_list[i] * scale + shift
+                    post_depth_list[i][post_depth_list[i] < 0] = 0
+                aligned_depth[-INTERP_LEN:] = get_interpolate_frames(
+                    pre_depth_list, post_depth_list
+                )
+
+                for i in range(OVERLAP, INFER_LEN):
+                    new_depth = all_depth[step + i] * scale + shift
+                    new_depth[new_depth < 0] = 0
+                    aligned_depth.append(new_depth)
+
+                ref_align = ref_align[:1]
+                for kf_id in KF_ALIGN_LIST[1:]:
+                    new_depth = all_depth[step + kf_id] * scale + shift
+                    new_depth[new_depth < 0] = 0
+                    ref_align.append(new_depth)
+
+        all_depth = aligned_depth
+
+        return np.stack(all_depth[:T], axis=0)

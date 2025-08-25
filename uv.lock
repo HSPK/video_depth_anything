@@ -854,19 +854,19 @@ dependencies = [
 requires-dist = [
     { name = "decord", specifier = ">=0.6.0" },
     { name = "easydict", specifier = ">=1.13" },
-    { name = "einops", specifier = "==0.4.1" },
-    { name = "imageio", specifier = "==2.19.3" },
-    { name = "imageio-ffmpeg", specifier = "==0.4.7" },
+    { name = "einops", specifier = ">=0.4.1" },
+    { name = "imageio", specifier = ">=2.19.3" },
+    { name = "imageio-ffmpeg", specifier = ">=0.4.7" },
     { name = "matplotlib", specifier = ">=3.10.5" },
-    { name = "numpy", specifier = "==1.23.1" },
+    { name = "numpy", specifier = ">=1.23.1" },
     { name = "opencv-python", specifier = ">=4.7.0.72" },
-    { name = "openexr", specifier = "==3.3.1" },
-    { name = "pillow", specifier = ">=11.3.0" },
+    { name = "openexr", specifier = ">=3.3.1" },
+    { name = "pillow", specifier = ">=10.4.0" },
     { name = "setuptools", specifier = ">=80.9.0" },
-    { name = "torch", specifier = "==2.1.1" },
-    { name = "torchvision", specifier = "==0.16.1" },
+    { name = "torch", specifier = ">=2.1.1" },
+    { name = "torchvision", specifier = ">=0.16.1" },
     { name = "tqdm", specifier = ">=4.67.1" },
-    { name = "xformers", specifier = "==0.0.23" },
+    { name = "xformers", specifier = ">=0.0.23" },
 ]
 
 [[package]]
